@@ -1,6 +1,6 @@
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
@@ -20,8 +20,8 @@ async_session_maker = async_sessionmaker(
     autoflush=False,
 )
 
-# Declarative base for models
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 # Dependency for FastAPI
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
