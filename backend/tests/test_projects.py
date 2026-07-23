@@ -1,4 +1,6 @@
 import pytest
+import sqlalchemy.exc
+from sqlalchemy import select
 from httpx import AsyncClient
 from uuid import uuid4
 
@@ -762,3 +764,33 @@ async def test_project_dashboard_agency_member_unassigned(async_client: AsyncCli
 
     res = await async_client.get(f"/projects/{project.id}/dashboard", headers={"Authorization": f"Bearer {member_token}"})
     assert res.status_code == 404
+
+@pytest.mark.asyncio
+async def test_schema_level_security(db_session):
+    agency_a = await create_agency(db_session, "Agency A", "a")
+
+    agency_b = await create_agency(db_session, "Agency B", "b")
+    client_b = await create_client(db_session, agency_b.id, "Client B")
+
+    agency_a_id = agency_a.id
+    client_b_id = client_b.id
+
+    project = Project(
+        agency_id=agency_a_id,
+        client_id=client_b_id,
+        name="Schema bypass attempt"
+    )
+    db_session.add(project)
+
+    with pytest.raises(sqlalchemy.exc.IntegrityError):
+        await db_session.commit()
+
+    await db_session.rollback()
+
+    stmt = select(Project).where(
+        Project.agency_id == agency_a_id,
+        Project.client_id == client_b_id,
+        Project.name == "Schema bypass attempt"
+    )
+    result = await db_session.execute(stmt)
+    assert result.scalar_one_or_none() is None
