@@ -6,7 +6,7 @@ from app.models.user import User
 from app.models.agency import Agency, AgencyMembership
 from app.models.client import Client, ClientMembership
 from app.models.project import Project, ProjectMembership
-from app.models.enums import RoleEnum
+from app.models.enums import RoleEnum, TaskStatusEnum, VisibilityEnum
 from app.core.security import get_password_hash
 
 async def create_user(db_session, email, hashed_password, is_active=True):
@@ -579,3 +579,186 @@ async def test_project_member_removal_atomic_rollback(async_client: AsyncClient,
     )).scalar_one_or_none()
 
     assert mem_after is not None
+
+@pytest.mark.asyncio
+async def test_project_dashboard_client_user(async_client: AsyncClient, db_session, password, hashed_password):
+    agency = await create_agency(db_session, "Agency A", "a")
+    client_obj = await create_client(db_session, agency.id, "Client")
+    client_user = await create_user(db_session, "client@test.com", hashed_password, is_active=True)
+    await create_agency_membership(db_session, client_user.id, agency.id, RoleEnum.client_user.value)
+    await create_client_membership(db_session, client_user.id, agency.id, client_obj.id)
+
+    project = await create_project(db_session, agency.id, client_obj.id, "Proj")
+
+    # Internal tasks: 3 todo, 2 in_progress, 1 review, 4 done
+    for _ in range(3):
+        t = await create_task(db_session, project.id, agency.id, "Int Todo")
+        t.status = TaskStatusEnum.todo.value
+    for _ in range(2):
+        t = await create_task(db_session, project.id, agency.id, "Int InProg")
+        t.status = TaskStatusEnum.in_progress.value
+    for _ in range(1):
+        t = await create_task(db_session, project.id, agency.id, "Int Rev")
+        t.status = TaskStatusEnum.review.value
+    for _ in range(4):
+        t = await create_task(db_session, project.id, agency.id, "Int Done")
+        t.status = TaskStatusEnum.done.value
+
+    # Client tasks: 2 todo, 1 done
+    for _ in range(2):
+        t = await create_task(db_session, project.id, agency.id, "Cli Todo")
+        t.visibility = VisibilityEnum.client.value
+        t.status = TaskStatusEnum.todo.value
+    for _ in range(1):
+        t = await create_task(db_session, project.id, agency.id, "Cli Done")
+        t.visibility = VisibilityEnum.client.value
+        t.status = TaskStatusEnum.done.value
+
+    await db_session.commit()
+
+    # Time entry attached to one of the internal tasks
+    from sqlalchemy import select
+    internal_task_result = await db_session.execute(select(Task).where(Task.visibility == VisibilityEnum.internal.value).limit(1))
+    internal_task = internal_task_result.scalar_one()
+    await create_time_entry(db_session, internal_task.id, project.id, agency.id, client_user.id, 120, date.today())
+
+    client_token = await login(async_client, "client@test.com", password, str(agency.id))
+
+    res = await async_client.get(f"/projects/{project.id}/dashboard", headers={"Authorization": f"Bearer {client_token}"})
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["task_counts"]["todo"] == 2
+    assert data["task_counts"]["in_progress"] == 0
+    assert data["task_counts"]["review"] == 0
+    assert data["task_counts"]["done"] == 1
+    assert "hours_logged" not in data
+
+@pytest.mark.asyncio
+async def test_project_dashboard_client_cross_client(async_client: AsyncClient, db_session, password, hashed_password):
+    agency = await create_agency(db_session, "Agency A", "a")
+    client_1 = await create_client(db_session, agency.id, "Client 1")
+    client_2 = await create_client(db_session, agency.id, "Client 2")
+
+    project_1 = await create_project(db_session, agency.id, client_1.id, "Proj 1")
+    project_2 = await create_project(db_session, agency.id, client_2.id, "Proj 2")
+
+    client_user = await create_user(db_session, "client1@test.com", hashed_password, is_active=True)
+    await create_agency_membership(db_session, client_user.id, agency.id, RoleEnum.client_user.value)
+    await create_client_membership(db_session, client_user.id, agency.id, client_1.id)
+
+    client_token = await login(async_client, "client1@test.com", password, str(agency.id))
+
+    # Assert successful for their own client's project
+    res_1 = await async_client.get(f"/projects/{project_1.id}/dashboard", headers={"Authorization": f"Bearer {client_token}"})
+    assert res_1.status_code == 200
+
+    # Assert 404 for another client's project in same agency
+    res_2 = await async_client.get(f"/projects/{project_2.id}/dashboard", headers={"Authorization": f"Bearer {client_token}"})
+    assert res_2.status_code == 404
+
+@pytest.mark.asyncio
+async def test_project_dashboard_cross_tenant(async_client: AsyncClient, db_session, password, hashed_password):
+    import uuid
+    # Agency A
+    agency_a = await create_agency(db_session, "Agency A", "a")
+    admin_a = await create_user(db_session, "admin@test.com", hashed_password)
+    await create_agency_membership(db_session, admin_a.id, agency_a.id, RoleEnum.agency_admin.value)
+
+    # Agency B
+    agency_b = await create_agency(db_session, "Agency B", "b")
+    client_b = await create_client(db_session, agency_b.id, "Client B")
+    project_b = await create_project(db_session, agency_b.id, client_b.id, "Proj B")
+
+    admin_token = await login(async_client, "admin@test.com", password, str(agency_a.id))
+
+    res = await async_client.get(f"/projects/{project_b.id}/dashboard", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res.status_code == 404
+
+    res_rand = await async_client.get(f"/projects/{uuid.uuid4()}/dashboard", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res_rand.status_code == 404
+
+@pytest.mark.asyncio
+async def test_project_dashboard_staff_aggregation(async_client: AsyncClient, db_session, password, hashed_password):
+    agency = await create_agency(db_session, "Agency A", "a")
+    admin = await create_user(db_session, "admin@test.com", hashed_password)
+    await create_agency_membership(db_session, admin.id, agency.id, RoleEnum.agency_admin.value)
+
+    client_obj = await create_client(db_session, agency.id, "Client")
+    project = await create_project(db_session, agency.id, client_obj.id, "Proj")
+
+    # Internal tasks: 3 todo, 2 in_progress, 1 review, 4 done
+    for _ in range(3):
+        t = await create_task(db_session, project.id, agency.id, "Int Todo")
+        t.status = TaskStatusEnum.todo.value
+    for _ in range(2):
+        t = await create_task(db_session, project.id, agency.id, "Int InProg")
+        t.status = TaskStatusEnum.in_progress.value
+    for _ in range(1):
+        t = await create_task(db_session, project.id, agency.id, "Int Rev")
+        t.status = TaskStatusEnum.review.value
+    for _ in range(4):
+        t = await create_task(db_session, project.id, agency.id, "Int Done")
+        t.status = TaskStatusEnum.done.value
+
+    # Client tasks: 2 todo, 1 done
+    for _ in range(2):
+        t = await create_task(db_session, project.id, agency.id, "Cli Todo")
+        t.visibility = VisibilityEnum.client.value
+        t.status = TaskStatusEnum.todo.value
+    for _ in range(1):
+        t = await create_task(db_session, project.id, agency.id, "Cli Done")
+        t.visibility = VisibilityEnum.client.value
+        t.status = TaskStatusEnum.done.value
+
+    await db_session.commit()
+
+    from sqlalchemy import select
+    tasks_result = await db_session.execute(select(Task).where(Task.project_id == project.id).limit(3))
+    tasks = tasks_result.scalars().all()
+    await create_time_entry(db_session, tasks[0].id, project.id, agency.id, admin.id, 30, date.today())
+    await create_time_entry(db_session, tasks[1].id, project.id, agency.id, admin.id, 45, date.today())
+    await create_time_entry(db_session, tasks[2].id, project.id, agency.id, admin.id, 60, date.today())
+
+    admin_token = await login(async_client, "admin@test.com", password, str(agency.id))
+
+    res = await async_client.get(f"/projects/{project.id}/dashboard", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["task_counts"]["todo"] == 5
+    assert data["task_counts"]["in_progress"] == 2
+    assert data["task_counts"]["review"] == 1
+    assert data["task_counts"]["done"] == 5
+    assert data["hours_logged"] == 135
+
+@pytest.mark.asyncio
+async def test_project_dashboard_staff_zero_time(async_client: AsyncClient, db_session, password, hashed_password):
+    agency = await create_agency(db_session, "Agency A", "a")
+    admin = await create_user(db_session, "admin@test.com", hashed_password)
+    await create_agency_membership(db_session, admin.id, agency.id, RoleEnum.agency_admin.value)
+
+    client_obj = await create_client(db_session, agency.id, "Client")
+    project = await create_project(db_session, agency.id, client_obj.id, "Proj")
+
+    admin_token = await login(async_client, "admin@test.com", password, str(agency.id))
+
+    res = await async_client.get(f"/projects/{project.id}/dashboard", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["hours_logged"] == 0
+
+@pytest.mark.asyncio
+async def test_project_dashboard_agency_member_unassigned(async_client: AsyncClient, db_session, password, hashed_password):
+    agency = await create_agency(db_session, "Agency A", "a")
+    member = await create_user(db_session, "member@test.com", hashed_password)
+    await create_agency_membership(db_session, member.id, agency.id, RoleEnum.agency_member.value)
+
+    client_obj = await create_client(db_session, agency.id, "Client")
+    project = await create_project(db_session, agency.id, client_obj.id, "Proj")
+
+    member_token = await login(async_client, "member@test.com", password, str(agency.id))
+
+    res = await async_client.get(f"/projects/{project.id}/dashboard", headers={"Authorization": f"Bearer {member_token}"})
+    assert res.status_code == 404
