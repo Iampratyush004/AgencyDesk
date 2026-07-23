@@ -80,9 +80,9 @@ async def test_admin_access_same_agency(async_client: AsyncClient, db_session, p
     await create_agency_membership(db_session, user.id, agency.id, RoleEnum.agency_admin.value)
     client_obj = await create_client(db_session, agency.id, "Client A")
     project = await create_project(db_session, agency.id, client_obj.id, "Project A")
-    
+
     token = await login(async_client, "admin@test.com", password, str(agency.id))
-    
+
     # 1. Agency A admin can access Agency A project.
     res = await async_client.get(f"/projects/{project.id}", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
@@ -96,16 +96,16 @@ async def test_admin_access_cross_agency(async_client: AsyncClient, db_session, 
     agency_a = await create_agency(db_session, "Agency A", "agency-a")
     agency_b = await create_agency(db_session, "Agency B", "agency-b")
     await create_agency_membership(db_session, user.id, agency_a.id, RoleEnum.agency_admin.value)
-    
+
     client_b = await create_client(db_session, agency_b.id, "Client B")
     project_b = await create_project(db_session, agency_b.id, client_b.id, "Project B")
-    
+
     token = await login(async_client, "admin@test.com", password, str(agency_a.id))
-    
+
     # 2. Agency A admin gets 404 for Agency B project.
     res = await async_client.get(f"/projects/{project_b.id}", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 404
-    
+
     # 3. Cross-tenant guessed ID and nonexistent ID have identical 404 behavior.
     res_fake = await async_client.get(f"/projects/{uuid4()}", headers={"Authorization": f"Bearer {token}"})
     assert res_fake.status_code == 404
@@ -116,27 +116,27 @@ async def test_agency_member_access(async_client: AsyncClient, db_session, passw
     user = await create_user(db_session, "member@test.com", hashed_password)
     agency = await create_agency(db_session, "Agency A", "agency-a")
     await create_agency_membership(db_session, user.id, agency.id, RoleEnum.agency_member.value)
-    
+
     client_obj = await create_client(db_session, agency.id, "Client A")
     assigned_project = await create_project(db_session, agency.id, client_obj.id, "Assigned")
     unassigned_project = await create_project(db_session, agency.id, client_obj.id, "Unassigned")
-    
+
     await create_project_membership(db_session, user.id, assigned_project.id, agency.id)
-    
+
     agency_b = await create_agency(db_session, "Agency B", "agency-b")
     client_b = await create_client(db_session, agency_b.id, "Client B")
     project_b = await create_project(db_session, agency_b.id, client_b.id, "Project B")
-    
+
     token = await login(async_client, "member@test.com", password, str(agency.id))
-    
+
     # 4. agency_member can access assigned project.
     res = await async_client.get(f"/projects/{assigned_project.id}", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
-    
+
     # 5. agency_member gets 404 for unassigned same-agency project.
     res2 = await async_client.get(f"/projects/{unassigned_project.id}", headers={"Authorization": f"Bearer {token}"})
     assert res2.status_code == 404
-    
+
     # 6. agency_member gets 404 for another-agency project.
     res3 = await async_client.get(f"/projects/{project_b.id}", headers={"Authorization": f"Bearer {token}"})
     assert res3.status_code == 404
@@ -146,29 +146,29 @@ async def test_client_user_access(async_client: AsyncClient, db_session, passwor
     user = await create_user(db_session, "client@test.com", hashed_password)
     agency = await create_agency(db_session, "Agency A", "agency-a")
     await create_agency_membership(db_session, user.id, agency.id, RoleEnum.client_user.value)
-    
+
     client_a = await create_client(db_session, agency.id, "Client A")
     await create_client_membership(db_session, user.id, agency.id, client_a.id)
-    
+
     client_other = await create_client(db_session, agency.id, "Client Other")
-    
+
     project_mine = await create_project(db_session, agency.id, client_a.id, "Mine")
     project_other = await create_project(db_session, agency.id, client_other.id, "Other")
-    
+
     agency_b = await create_agency(db_session, "Agency B", "agency-b")
     client_b = await create_client(db_session, agency_b.id, "Client B")
     project_b = await create_project(db_session, agency_b.id, client_b.id, "Project B")
-    
+
     token = await login(async_client, "client@test.com", password, str(agency.id))
-    
+
     # 7. client_user can access their Client's project.
     res = await async_client.get(f"/projects/{project_mine.id}", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
-    
+
     # 8. client_user gets 404 for another Client's project in same agency.
     res2 = await async_client.get(f"/projects/{project_other.id}", headers={"Authorization": f"Bearer {token}"})
     assert res2.status_code == 404
-    
+
     # 9. client_user gets 404 for another-agency project.
     res3 = await async_client.get(f"/projects/{project_b.id}", headers={"Authorization": f"Bearer {token}"})
     assert res3.status_code == 404
@@ -178,33 +178,33 @@ async def test_list_projects(async_client: AsyncClient, db_session, password, ha
     user_admin = await create_user(db_session, "admin@test.com", hashed_password)
     user_member = await create_user(db_session, "member@test.com", hashed_password)
     user_client = await create_user(db_session, "client@test.com", hashed_password)
-    
+
     agency = await create_agency(db_session, "Agency A", "agency-a")
     agency_b = await create_agency(db_session, "Agency B", "agency-b")
-    
+
     await create_agency_membership(db_session, user_admin.id, agency.id, RoleEnum.agency_admin.value)
     await create_agency_membership(db_session, user_member.id, agency.id, RoleEnum.agency_member.value)
     await create_agency_membership(db_session, user_client.id, agency.id, RoleEnum.client_user.value)
-    
+
     client_a = await create_client(db_session, agency.id, "Client A")
     client_other = await create_client(db_session, agency.id, "Client Other")
     client_b = await create_client(db_session, agency_b.id, "Client B")
-    
+
     await create_client_membership(db_session, user_client.id, agency.id, client_a.id)
-    
+
     # Projects
     p_mine = await create_project(db_session, agency.id, client_a.id, "Mine")
     p_unassigned = await create_project(db_session, agency.id, client_a.id, "Unassigned")
     p_other = await create_project(db_session, agency.id, client_other.id, "Other")
     p_b = await create_project(db_session, agency_b.id, client_b.id, "Proj B")
-    
+
     await create_project_membership(db_session, user_member.id, p_mine.id, agency.id)
-    
+
     # Tokens
     t_admin = await login(async_client, "admin@test.com", password, str(agency.id))
     t_member = await login(async_client, "member@test.com", password, str(agency.id))
     t_client = await login(async_client, "client@test.com", password, str(agency.id))
-    
+
     # 10. Admin list contains only active-agency projects.
     res_admin = await async_client.get("/projects", headers={"Authorization": f"Bearer {t_admin}"})
     assert res_admin.status_code == 200
@@ -213,7 +213,7 @@ async def test_list_projects(async_client: AsyncClient, db_session, password, ha
     assert str(p_unassigned.id) in ids_admin
     assert str(p_other.id) in ids_admin
     assert str(p_b.id) not in ids_admin  # 13. Unauthorized never appear
-    
+
     # 11. Agency-member list contains only assigned projects.
     res_member = await async_client.get("/projects", headers={"Authorization": f"Bearer {t_member}"})
     assert res_member.status_code == 200
@@ -221,7 +221,7 @@ async def test_list_projects(async_client: AsyncClient, db_session, password, ha
     assert str(p_mine.id) in ids_member
     assert str(p_unassigned.id) not in ids_member
     assert str(p_other.id) not in ids_member
-    
+
     # 12. Client-user list contains only their Client's projects.
     res_client = await async_client.get("/projects", headers={"Authorization": f"Bearer {t_client}"})
     assert res_client.status_code == 200
@@ -229,15 +229,15 @@ async def test_list_projects(async_client: AsyncClient, db_session, password, ha
     assert str(p_mine.id) in ids_client
     assert str(p_unassigned.id) in ids_client
     assert str(p_other.id) not in ids_client
-    
+
     # 14. skip/limit pagination is applied after authorization filtering.
     res_pag = await async_client.get("/projects?limit=1", headers={"Authorization": f"Bearer {t_admin}"})
     assert len(res_pag.json()) == 1
-    
+
     # 15. limit > 100 is rejected.
     res_limit = await async_client.get("/projects?limit=101", headers={"Authorization": f"Bearer {t_admin}"})
     assert res_limit.status_code == 422
-    
+
     # 16. negative skip is rejected.
     res_skip = await async_client.get("/projects?skip=-1", headers={"Authorization": f"Bearer {t_admin}"})
     assert res_skip.status_code == 422
@@ -248,25 +248,25 @@ async def test_create_project(async_client: AsyncClient, db_session, password, h
     agency = await create_agency(db_session, "Agency A", "agency-a")
     agency_b = await create_agency(db_session, "Agency B", "agency-b")
     await create_agency_membership(db_session, user_admin.id, agency.id, RoleEnum.agency_admin.value)
-    
+
     client_a = await create_client(db_session, agency.id, "Client A")
     client_b = await create_client(db_session, agency_b.id, "Client B")
-    
+
     token = await login(async_client, "admin@test.com", password, str(agency.id))
-    
+
     # 17. Admin can create a project for a Client in active agency.
     res = await async_client.post("/projects", json={
         "name": "New Proj",
         "client_id": str(client_a.id)
     }, headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 201
-    
+
     # 18. Persisted created Project.agency_id equals TenantContext agency.
     from sqlalchemy import select
     from app.models.project import Project
     persisted_project = (await db_session.execute(select(Project).where(Project.id == res.json()["id"]))).scalar_one()
     assert persisted_project.agency_id == agency.id
-    
+
     # 19. Request supplying agency_id is rejected.
     res_malicious = await async_client.post("/projects", json={
         "name": "Malicious Proj",
@@ -274,7 +274,7 @@ async def test_create_project(async_client: AsyncClient, db_session, password, h
         "agency_id": str(agency_b.id)
     }, headers={"Authorization": f"Bearer {token}"})
     assert res_malicious.status_code == 422 # Pydantic extra='forbid'
-    
+
     # 20. Cross-tenant client_id creation returns 404.
     res_cross = await async_client.post("/projects", json={
         "name": "Cross Proj",
@@ -287,20 +287,20 @@ async def test_create_project_unauthorized(async_client: AsyncClient, db_session
     user_member = await create_user(db_session, "member@test.com", hashed_password)
     user_client = await create_user(db_session, "client@test.com", hashed_password)
     agency = await create_agency(db_session, "Agency A", "agency-a")
-    
+
     await create_agency_membership(db_session, user_member.id, agency.id, RoleEnum.agency_member.value)
     await create_agency_membership(db_session, user_client.id, agency.id, RoleEnum.client_user.value)
-    
+
     client_a = await create_client(db_session, agency.id, "Client A")
     await create_client_membership(db_session, user_client.id, agency.id, client_a.id)
-    
+
     t_member = await login(async_client, "member@test.com", password, str(agency.id))
     t_client = await login(async_client, "client@test.com", password, str(agency.id))
-    
+
     # 21. agency_member cannot create project.
     res1 = await async_client.post("/projects", json={"name": "X", "client_id": str(client_a.id)}, headers={"Authorization": f"Bearer {t_member}"})
     assert res1.status_code == 403
-    
+
     # 22. client_user cannot create project.
     res2 = await async_client.post("/projects", json={"name": "Y", "client_id": str(client_a.id)}, headers={"Authorization": f"Bearer {t_client}"})
     assert res2.status_code == 403
@@ -314,9 +314,9 @@ async def test_update_project(async_client: AsyncClient, db_session, password, h
     client_obj = await create_client(db_session, agency.id, "Client A")
     client_b = await create_client(db_session, agency_b.id, "Client B")
     project = await create_project(db_session, agency.id, client_obj.id, "Project A")
-    
+
     token = await login(async_client, "admin@test.com", password, str(agency.id))
-    
+
     # 23, 24, 25. Admin can update name/description/status.
     res = await async_client.patch(f"/projects/{project.id}", json={
         "name": "Updated",
@@ -327,13 +327,13 @@ async def test_update_project(async_client: AsyncClient, db_session, password, h
     assert res.json()["name"] == "Updated"
     assert res.json()["description"] == "Desc"
     assert res.json()["status"] == "completed"
-    
+
     # 24. PATCH cannot change client_id.
     res2 = await async_client.patch(f"/projects/{project.id}", json={
         "client_id": str(client_b.id)
     }, headers={"Authorization": f"Bearer {token}"})
     assert res2.status_code == 422 # Pydantic extra='forbid'
-    
+
     # 25. PATCH cannot change agency_id.
     res3 = await async_client.patch(f"/projects/{project.id}", json={
         "agency_id": str(agency_b.id)
@@ -347,46 +347,46 @@ async def test_project_memberships(async_client: AsyncClient, db_session, passwo
     member_inactive = await create_user(db_session, "inactive@test.com", hashed_password)
     client_u = await create_user(db_session, "client@test.com", hashed_password)
     other_member = await create_user(db_session, "other@test.com", hashed_password)
-    
+
     agency = await create_agency(db_session, "Agency A", "a")
     agency_b = await create_agency(db_session, "Agency B", "b")
-    
+
     await create_agency_membership(db_session, admin.id, agency.id, RoleEnum.agency_admin.value)
     await create_agency_membership(db_session, member.id, agency.id, RoleEnum.agency_member.value)
     await create_agency_membership(db_session, member_inactive.id, agency.id, RoleEnum.agency_member.value, is_active=False)
     await create_agency_membership(db_session, client_u.id, agency.id, RoleEnum.client_user.value)
-    
+
     await create_agency_membership(db_session, other_member.id, agency_b.id, RoleEnum.agency_member.value)
-    
+
     client_obj = await create_client(db_session, agency.id, "Client")
     project = await create_project(db_session, agency.id, client_obj.id, "Proj")
-    
+
     token = await login(async_client, "admin@test.com", password, str(agency.id))
-    
+
     # 27. Admin can assign an active agency_member to project.
     res = await async_client.post(f"/projects/{project.id}/members", json={"user_id": str(member.id)}, headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 201
-    
+
     # 33. Membership response does not expose agency_id.
     assert "agency_id" not in res.json()
-    
+
     # 32. Duplicate ProjectMembership request is idempotent.
     res_dup = await async_client.post(f"/projects/{project.id}/members", json={"user_id": str(member.id)}, headers={"Authorization": f"Bearer {token}"})
     assert res_dup.status_code == 201
     assert res.json()["id"] == res_dup.json()["id"]
-    
+
     # 28. Cannot assign user from another agency.
     res_other = await async_client.post(f"/projects/{project.id}/members", json={"user_id": str(other_member.id)}, headers={"Authorization": f"Bearer {token}"})
     assert res_other.status_code == 404
-    
+
     # 29. Cannot assign inactive AgencyMembership.
     res_inactive = await async_client.post(f"/projects/{project.id}/members", json={"user_id": str(member_inactive.id)}, headers={"Authorization": f"Bearer {token}"})
     assert res_inactive.status_code == 404
-    
+
     # 30. Cannot assign client_user.
     res_client = await async_client.post(f"/projects/{project.id}/members", json={"user_id": str(client_u.id)}, headers={"Authorization": f"Bearer {token}"})
     assert res_client.status_code == 404
-    
+
     # 31. Can assign agency_admin.
     res_admin = await async_client.post(f"/projects/{project.id}/members", json={"user_id": str(admin.id)}, headers={"Authorization": f"Bearer {token}"})
     assert res_admin.status_code == 201
@@ -396,21 +396,186 @@ async def test_project_membership_deactivated(async_client: AsyncClient, db_sess
     user = await create_user(db_session, "member@test.com", hashed_password)
     agency = await create_agency(db_session, "Agency A", "agency-a")
     membership = await create_agency_membership(db_session, user.id, agency.id, RoleEnum.agency_member.value)
-    
+
     token = await login(async_client, "member@test.com", password, str(agency.id))
-    
+
     # 3. Confirm GET /projects succeeds.
     res_success = await async_client.get("/projects", headers={"Authorization": f"Bearer {token}"})
     assert res_success.status_code == 200
-    
+
     # 4. Deactivate that AgencyMembership in PostgreSQL AFTER token issuance.
     membership.is_active = False
     await db_session.commit()
-    
+
     # 7. Call GET /projects again with SAME JWT.
     res_fail = await async_client.get("/projects", headers={"Authorization": f"Bearer {token}"})
-    
+
     # 8. Assert 401 Unauthorized. (TenantContext revalidation fails)
     assert res_fail.status_code == 401
 
 
+from app.models.task import Task
+from app.models.time_entry import TimeEntry
+from datetime import date
+
+async def create_task(db_session, project_id, agency_id, title, assignee_id=None):
+    task = Task(project_id=project_id, agency_id=agency_id, title=title, assignee_id=assignee_id)
+    db_session.add(task)
+    await db_session.commit()
+    await db_session.refresh(task)
+    return task
+
+async def create_time_entry(db_session, task_id, project_id, agency_id, user_id, duration, entry_date):
+    entry = TimeEntry(
+        task_id=task_id, project_id=project_id, agency_id=agency_id,
+        user_id=user_id, duration_minutes=duration, date=entry_date
+    )
+    db_session.add(entry)
+    await db_session.commit()
+    await db_session.refresh(entry)
+    return entry
+
+@pytest.mark.asyncio
+async def test_project_member_removal_access(async_client: AsyncClient, db_session, password, hashed_password):
+    admin = await create_user(db_session, "admin@test.com", hashed_password)
+    member = await create_user(db_session, "member@test.com", hashed_password)
+    agency = await create_agency(db_session, "Agency A", "a")
+    await create_agency_membership(db_session, admin.id, agency.id, RoleEnum.agency_admin.value)
+    await create_agency_membership(db_session, member.id, agency.id, RoleEnum.agency_member.value)
+
+    client_obj = await create_client(db_session, agency.id, "Client")
+    project = await create_project(db_session, agency.id, client_obj.id, "Proj")
+    await create_project_membership(db_session, member.id, project.id, agency.id)
+
+    # Member gets a token while they have membership
+    member_token = await login(async_client, "member@test.com", password, str(agency.id))
+    admin_token = await login(async_client, "admin@test.com", password, str(agency.id))
+
+    # 1. Admin successfully removes member
+    res_del = await async_client.delete(f"/projects/{project.id}/members/{member.id}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res_del.status_code == 204
+
+    # 2. Reusing same JWT, member now gets 404
+    res_get = await async_client.get(f"/projects/{project.id}", headers={"Authorization": f"Bearer {member_token}"})
+    assert res_get.status_code == 404
+
+@pytest.mark.asyncio
+async def test_project_member_removal_tasks(async_client: AsyncClient, db_session, password, hashed_password):
+    admin = await create_user(db_session, "admin@test.com", hashed_password)
+    member = await create_user(db_session, "member@test.com", hashed_password)
+    agency = await create_agency(db_session, "Agency A", "a")
+    await create_agency_membership(db_session, admin.id, agency.id, RoleEnum.agency_admin.value)
+    await create_agency_membership(db_session, member.id, agency.id, RoleEnum.agency_member.value)
+
+    client_obj = await create_client(db_session, agency.id, "Client")
+    project_1 = await create_project(db_session, agency.id, client_obj.id, "Proj 1")
+    project_2 = await create_project(db_session, agency.id, client_obj.id, "Proj 2")
+
+    await create_project_membership(db_session, member.id, project_1.id, agency.id)
+    await create_project_membership(db_session, admin.id, project_1.id, agency.id)
+    await create_project_membership(db_session, member.id, project_2.id, agency.id)
+
+    # Setup Tasks
+    task_a = await create_task(db_session, project_1.id, agency.id, "Task A", member.id) # Should be unassigned
+    task_b = await create_task(db_session, project_1.id, agency.id, "Task B", admin.id)  # Unchanged
+    task_c = await create_task(db_session, project_2.id, agency.id, "Task C", member.id) # Unchanged (different project)
+
+    admin_token = await login(async_client, "admin@test.com", password, str(agency.id))
+
+    # Remove member from project 1
+    res_del = await async_client.delete(f"/projects/{project_1.id}/members/{member.id}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res_del.status_code == 204
+
+    # Re-query
+    from sqlalchemy import select
+    db_session.expunge_all()
+    t_a = (await db_session.execute(select(Task).where(Task.id == task_a.id))).scalar_one()
+    t_b = (await db_session.execute(select(Task).where(Task.id == task_b.id))).scalar_one()
+    t_c = (await db_session.execute(select(Task).where(Task.id == task_c.id))).scalar_one()
+
+    assert t_a.assignee_id is None
+    assert t_b.assignee_id == admin.id
+    assert t_c.assignee_id == member.id
+
+@pytest.mark.asyncio
+async def test_project_member_removal_time_entries(async_client: AsyncClient, db_session, password, hashed_password):
+    admin = await create_user(db_session, "admin@test.com", hashed_password)
+    member = await create_user(db_session, "member@test.com", hashed_password)
+    agency = await create_agency(db_session, "Agency A", "a")
+    await create_agency_membership(db_session, admin.id, agency.id, RoleEnum.agency_admin.value)
+    await create_agency_membership(db_session, member.id, agency.id, RoleEnum.agency_member.value)
+
+    client_obj = await create_client(db_session, agency.id, "Client")
+    project = await create_project(db_session, agency.id, client_obj.id, "Proj")
+    await create_project_membership(db_session, member.id, project.id, agency.id)
+
+    task = await create_task(db_session, project.id, agency.id, "Task", member.id)
+    t_entry = await create_time_entry(db_session, task.id, project.id, agency.id, member.id, 60, date.today())
+
+    entry_id = t_entry.id
+    entry_user_id = t_entry.user_id
+    entry_task_id = t_entry.task_id
+    entry_project_id = t_entry.project_id
+    entry_duration = t_entry.duration_minutes
+    entry_date = t_entry.date
+
+    admin_token = await login(async_client, "admin@test.com", password, str(agency.id))
+    res_del = await async_client.delete(f"/projects/{project.id}/members/{member.id}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res_del.status_code == 204
+
+    db_session.expunge_all()
+    from sqlalchemy import select
+    fetched_entry = (await db_session.execute(select(TimeEntry).where(TimeEntry.id == entry_id))).scalar_one()
+
+    assert fetched_entry.user_id == entry_user_id
+    assert fetched_entry.task_id == entry_task_id
+    assert fetched_entry.project_id == entry_project_id
+    assert fetched_entry.duration_minutes == entry_duration
+    assert fetched_entry.date == entry_date
+
+@pytest.mark.asyncio
+async def test_project_member_removal_atomic_rollback(async_client: AsyncClient, db_session, password, hashed_password):
+    from unittest import mock
+    admin = await create_user(db_session, "admin@test.com", hashed_password)
+    member = await create_user(db_session, "member@test.com", hashed_password)
+    agency = await create_agency(db_session, "Agency A", "a")
+    await create_agency_membership(db_session, admin.id, agency.id, RoleEnum.agency_admin.value)
+    await create_agency_membership(db_session, member.id, agency.id, RoleEnum.agency_member.value)
+
+    client_obj = await create_client(db_session, agency.id, "Client")
+    project = await create_project(db_session, agency.id, client_obj.id, "Proj")
+    await create_project_membership(db_session, member.id, project.id, agency.id)
+
+    task = await create_task(db_session, project.id, agency.id, "Task", member.id)
+
+    admin_token = await login(async_client, "admin@test.com", password, str(agency.id))
+
+    task_id = task.id
+    project_id = project.id
+    member_id = member.id
+    agency_id = agency.id
+
+    # Mock the SQLAlchemy delete constructor only inside the projects route module
+    with mock.patch("app.api.routes.projects.delete", side_effect=Exception("Forced atomic rollback")):
+        with pytest.raises(Exception, match="Forced atomic rollback"):
+            await async_client.delete(f"/projects/{project_id}/members/{member_id}", headers={"Authorization": f"Bearer {admin_token}"})
+
+    db_session.expunge_all()
+    from sqlalchemy import select, and_
+    t_after = (await db_session.execute(select(Task).where(Task.id == task_id))).scalar_one()
+
+    # 1. The task must STILL be assigned to member (update rolled back)
+    assert t_after.assignee_id == member_id
+
+    # 2. The project membership must STILL exist
+    mem_after = (await db_session.execute(
+        select(ProjectMembership).where(
+            and_(
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.user_id == member_id,
+                ProjectMembership.agency_id == agency_id
+            )
+        )
+    )).scalar_one_or_none()
+
+    assert mem_after is not None
