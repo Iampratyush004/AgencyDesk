@@ -387,9 +387,9 @@ async def test_project_memberships(async_client: AsyncClient, db_session, passwo
     res_client = await async_client.post(f"/projects/{project.id}/members", json={"user_id": str(client_u.id)}, headers={"Authorization": f"Bearer {token}"})
     assert res_client.status_code == 404
     
-    # 31. Cannot assign agency_admin.
+    # 31. Can assign agency_admin.
     res_admin = await async_client.post(f"/projects/{project.id}/members", json={"user_id": str(admin.id)}, headers={"Authorization": f"Bearer {token}"})
-    assert res_admin.status_code == 404
+    assert res_admin.status_code == 201
 
 @pytest.mark.asyncio
 async def test_project_membership_deactivated(async_client: AsyncClient, db_session, password, hashed_password):

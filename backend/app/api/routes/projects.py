@@ -129,21 +129,21 @@ async def create_project_membership(
     if existing_membership:
         return existing_membership
         
-    # Validate target user is an active agency_member in the same agency
+    # Validate target user is an active agency staff member in the same agency
     membership_result = await db.execute(
         select(AgencyMembership).where(
             and_(
                 AgencyMembership.user_id == payload.user_id,
                 AgencyMembership.agency_id == context.agency_id,
                 AgencyMembership.is_active == True,
-                AgencyMembership.role == RoleEnum.agency_member.value
+                AgencyMembership.role.in_([RoleEnum.agency_admin.value, RoleEnum.agency_member.value])
             )
         )
     )
     target_membership = membership_result.scalar_one_or_none()
     
     if not target_membership:
-        raise HTTPException(status_code=404, detail="Eligible agency member not found")
+        raise HTTPException(status_code=404, detail="Eligible agency staff member not found")
         
     project_membership = ProjectMembership(
         user_id=payload.user_id,
