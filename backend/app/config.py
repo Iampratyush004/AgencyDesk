@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "unsafe-development-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    FILE_STORAGE_ROOT: str = "uploads"
     
     model_config = SettingsConfigDict(
         env_file=".env",

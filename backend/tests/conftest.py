@@ -19,6 +19,10 @@ def event_loop():
 if not settings.DATABASE_URL.endswith("/agencydesk_test"):
     raise RuntimeError(f"Safety Guard Failed: Tests must run against 'agencydesk_test'. Current: {settings.DATABASE_URL}")
 
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def setup_test_storage(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "FILE_STORAGE_ROOT", str(tmp_path))
+
 @pytest_asyncio.fixture(scope="function")
 async def db_session():
     test_engine = create_async_engine(settings.DATABASE_URL, echo=False)
