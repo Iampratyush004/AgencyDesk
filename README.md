@@ -67,7 +67,7 @@ The project is designed to be set up locally in under 10 minutes.
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Iampratyush004/AgencyDesk.git
 cd AgencyDesk
 ```
 
@@ -137,6 +137,10 @@ python seed.py
 ```
 
 The seed script creates two agencies, multiple user roles, projects, internal and client-visible tasks, comments, time entries, files, approvals, and a user who belongs to two agencies.
+
+The seed script also creates the local file-storage directory and writes the demo files referenced by the seeded file records, so no additional file setup is required after cloning the repository.
+
+Uploaded files are stored on the local filesystem during development and are intentionally excluded from Git. Running the seed script recreates the seeded demo files; files uploaded manually at runtime are local to that installation.
 
 ### 6. Start the backend
 
