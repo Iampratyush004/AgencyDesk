@@ -233,3 +233,9 @@ Tenant isolation is enforced at multiple layers:
 User identity is global while roles are tenant-specific through `agency_memberships`, allowing the same user to belong to multiple agencies with different roles.
 
 For the detailed schema and access-control decisions, see `DESIGN.md`.
+
+## Testing Documentation
+
+For a detailed breakdown of the testing strategy, authorization scenarios, tenant-isolation cases, and edge cases covered by the backend suite, see `TESTING.md`.
+
+The exact inventory of all 69 backend tests is available in `TEST_INVENTORY.txt`.
