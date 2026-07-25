@@ -3,6 +3,9 @@
 AgencyDesk is a multi-tenant client and project management platform built for agency-client workflows. One deployment supports multiple isolated agencies, with role-based access for agency administrators, agency members, and client users.
 
 This project was built for the Sapyon take-home assignment using React, Python/FastAPI, and PostgreSQL, with an emphasis on tenant isolation, authorization correctness, schema design, and explicit handling of access-control edge cases.
+## Demo Video
+Walkthrough of AgencyDesk covering the application, multi-tenant architecture, RBAC, client portal, file approval workflow, and schema design.
+(https://drive.google.com/file/d/1JPQs6NkcONKcF-6iDHUlRpl4CROjtT9j/view?usp=sharing)
 
 ## Features
 
