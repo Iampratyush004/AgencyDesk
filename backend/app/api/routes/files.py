@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File as FastAPIFile, Form
 from fastapi.responses import FileResponse as FastAPIFileResponse
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
@@ -38,7 +39,7 @@ async def list_files(
             File.task_id == task.id,
             File.agency_id == context.agency_id
         )
-    )
+    ).options(selectinload(File.approvals))
     
     if context.role == RoleEnum.client_user.value:
         stmt = stmt.where(File.visibility == VisibilityEnum.client.value)
@@ -90,11 +91,13 @@ async def upload_file(
             file_size_bytes=file_size_bytes,
             visibility=visibility_value
         )
-        
+
         db.add(file_record)
         await db.commit()
-        await db.refresh(file_record)
-        return file_record
+
+        stmt = select(File).where(File.id == file_record.id).options(selectinload(File.approvals))
+        result = await db.execute(stmt)
+        return result.scalar_one()
     except Exception:
         physical_path.unlink(missing_ok=True)
         raise

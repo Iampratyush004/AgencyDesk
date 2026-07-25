@@ -124,6 +124,7 @@ export default function FilesPanel({ task, userContext }) {
       setReviewingFileId(null);
       setApprovalNote('');
       setApprovalStatus('approved');
+      fetchFiles();
 
       setTimeout(() => setApprovalSuccessMsg(''), 3000);
     } catch (err) {
@@ -250,6 +251,28 @@ export default function FilesPanel({ task, userContext }) {
                   )}
                 </div>
               </div>
+
+              {/* Approval Status Display */}
+              {file.visibility === 'client' && isAgencyStaff && (
+                <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: 'var(--bg-color)', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '0.75rem' }}>
+                  {file.approvals && file.approvals.length > 0 ? (
+                    file.approvals.map(appr => (
+                      <div key={appr.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: appr !== file.approvals[0] ? '0.5rem' : 0 }}>
+                        <div>
+                          <span style={{ fontWeight: '600', color: appr.status === 'approved' ? 'var(--text-main)' : 'var(--error-color)' }}>
+                            {appr.status === 'approved' ? 'Approved' : 'Needs Changes'}
+                          </span>
+                        </div>
+                        {appr.note && (
+                          <div style={{ color: 'var(--text-muted)' }}>Note: {appr.note}</div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ color: 'var(--text-muted)' }}>Awaiting client review</div>
+                  )}
+                </div>
+              )}
 
               {/* Client Review Form Inline */}
               {isClient && reviewingFileId === file.id && (

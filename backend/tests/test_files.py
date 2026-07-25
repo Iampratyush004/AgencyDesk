@@ -372,3 +372,14 @@ async def test_file_approvals(async_client: AsyncClient, db_session, password, h
     # Forbidden fields -> 422
     res = await async_client.post(f"/files/{f_client.id}/approvals", json={"status": "approved", "agency_id": str(uuid4())}, headers={"Authorization": f"Bearer {client_token}"})
     assert res.status_code == 422
+
+    # Verify the approval appears in the file listing for agency staff
+    res = await async_client.get(f"/tasks/{env['t_client'].id}/files", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res.status_code == 200
+    files_data = res.json()
+    client_file_data = next((f for f in files_data if f["id"] == str(f_client.id)), None)
+    assert client_file_data is not None
+    assert "approvals" in client_file_data
+    assert len(client_file_data["approvals"]) == 1
+    assert client_file_data["approvals"][0]["status"] == "needs_changes"
+    assert client_file_data["approvals"][0]["note"] == "fix this"
